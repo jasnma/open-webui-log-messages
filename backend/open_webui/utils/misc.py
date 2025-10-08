@@ -105,6 +105,13 @@ def get_last_assistant_message(messages: list[dict]) -> Optional[str]:
     return None
 
 
+def get_first_assistant_message(messages: list[dict]) -> Optional[dict]:
+    for message in messages:
+        if message["role"] == "assistant":
+            return message
+    return None
+
+
 def get_system_message(messages: list[dict]) -> Optional[dict]:
     for message in messages:
         if message["role"] == "system":
