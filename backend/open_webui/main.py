@@ -9,7 +9,7 @@ import sys
 import time
 import random
 import re
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 
 from contextlib import asynccontextmanager
@@ -93,6 +93,7 @@ from open_webui.routers import (
     users,
     utils,
     scim,
+    chat_logs,
 )
 
 from open_webui.routers.retrieval import (
@@ -108,6 +109,7 @@ from open_webui.models.functions import Functions
 from open_webui.models.models import Models
 from open_webui.models.users import UserModel, Users
 from open_webui.models.chats import Chats
+from open_webui.models.chat_logs import ChatLogs
 
 from open_webui.config import (
     # Ollama
@@ -466,7 +468,8 @@ from open_webui.utils.chat import (
     chat_action as chat_action_handler,
 )
 from open_webui.utils.embeddings import generate_embeddings
-from open_webui.utils.middleware import process_chat_payload, process_chat_response
+from open_webui.utils.middleware import process_chat_payload, process_chat_response, decode_conversation_id
+from open_webui.utils.misc import get_first_assistant_message
 from open_webui.utils.access_control import has_access
 
 from open_webui.utils.auth import (
@@ -1308,6 +1311,7 @@ app.include_router(
     evaluations.router, prefix="/api/v1/evaluations", tags=["evaluations"]
 )
 app.include_router(utils.router, prefix="/api/v1/utils", tags=["utils"])
+app.include_router(chat_logs.router, prefix="/api/v1/chat-logs", tags=["chat-logs"])
 
 # SCIM 2.0 API for identity management
 if SCIM_ENABLED:
@@ -1475,9 +1479,23 @@ async def chat_completion(
         if model_info_params.get("reasoning_tags") is not None:
             reasoning_tags = model_info_params.get("reasoning_tags")
 
+        conversation_id = form_data.pop("conversation_id", None)
+        if not conversation_id:
+            # 获取第一条assistant消息（如果存在）
+            messages = form_data.get("messages", [])
+            first_assistant_message = get_first_assistant_message(messages)
+            if first_assistant_message:
+                content = first_assistant_message.get('content', '')
+                if isinstance(content, str):
+                    conversation_id = str(decode_conversation_id(content))
+                    log.info(f"Decoded conversation_id: {conversation_id}")
+        else:
+            log.info(f"Using conversation_id: {conversation_id}")
+
         metadata = {
             "user_id": user.id,
             "chat_id": form_data.pop("chat_id", None),
+            "conversation_id": conversation_id,
             "message_id": form_data.pop("id", None),
             "session_id": form_data.pop("session_id", None),
             "filter_ids": form_data.pop("filter_ids", []),

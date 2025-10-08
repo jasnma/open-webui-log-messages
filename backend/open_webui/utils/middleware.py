@@ -15,7 +15,7 @@ import inspect
 import re
 import ast
 
-from uuid import uuid4
+from uuid import uuid4, UUID
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -28,6 +28,7 @@ from open_webui.models.oauth_sessions import OAuthSessions
 from open_webui.models.chats import Chats
 from open_webui.models.folders import Folders
 from open_webui.models.users import Users
+from open_webui.models.chat_logs import ChatLogs
 from open_webui.socket.main import (
     get_event_call,
     get_event_emitter,
@@ -1434,6 +1435,20 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     return form_data, metadata, events
 
+
+def encode_conversation_id(conv_id: str) -> str:
+    uuid = UUID(conv_id)
+    bits = ''.join(format(b, '08b') for b in uuid.bytes)
+    zw = ''.join('\u200b' if bit == '0' else '\u200c' for bit in bits)
+    return zw + '\u2060'
+
+def decode_conversation_id(text: str):
+    if '\u2060' not in text:
+        return None
+    prefix, rest = text.split('\u2060', 1)
+    bits = ''.join('0' if c == '\u200b' else '1' for c in prefix)
+    b = bytes(int(bits[i:i+8], 2) for i in range(0, len(bits), 8))
+    return UUID(bytes=b)
 
 async def process_chat_response(
     request, response, form_data, user, metadata, model, events, tasks
@@ -3013,6 +3028,9 @@ async def process_chat_response(
                     "title": title,
                 }
 
+                # 记录最终的模型响应
+                final_content = data.get('content', '')
+
                 if not ENABLE_REALTIME_CHAT_SAVE:
                     # Save message in the database
                     Chats.upsert_message_to_chat_by_id_and_message_id(
@@ -3084,6 +3102,31 @@ async def process_chat_response(
                 if event:
                     yield wrap_item(json.dumps(event))
 
+            conversation_id = None
+            if (not metadata.get("chat_id", None)):
+                if not metadata.get("conversation_id", None):
+                    conversation_id = str(uuid4())
+                    metadata["conversation_id"] = conversation_id
+                    log.info(f"Generated conversation_id: {conversation_id}")
+                    if conversation_id:
+                        encode_conversation_id_str = encode_conversation_id(conversation_id)
+                        yield wrap_item(json.dumps(
+                        {
+                            "choices":[
+                                {
+                                    "delta":{
+                                        "content":encode_conversation_id_str,
+                                        },
+                                    "index":0,
+                                    "finish_reason":"stop"
+                                }
+                            ]
+                        }
+                    ))
+                else:
+                    conversation_id = metadata.get("conversation_id", None)
+
+            content = ""
             async for data in original_generator:
                 data, _ = await process_filter_functions(
                     request=request,
@@ -3094,7 +3137,44 @@ async def process_chat_response(
                 )
 
                 if data:
+                    # 记录非标准流式响应
+                    data_str = ""
+                    if isinstance(data, str):
+                        data_str = data
+                    elif isinstance(data, bytes):
+                        data_str = data.decode("utf-8", errors="ignore")
+                    else:
+                        data_str = str(data)
+                    
+                    if data_str.startswith("data:"):
+                        try:
+                            json_data = json.loads(data_str[5:].strip())
+                            if 'choices' in json_data and len(json_data['choices']) > 0:
+                                delta_content = json_data['choices'][0].get('delta', {}).get('content', '')
+                                if delta_content:
+                                    content += delta_content
+                        except:
+                            pass
                     yield data
+
+            log.debug(f"content: {content}")
+
+            if conversation_id:
+                log.info(f"Final conversation_id: {conversation_id}")
+                if not ChatLogs.update_chat_log(
+                    conversation_id=conversation_id,
+                    user_id=user.id,
+                    model=form_data.get("model", "unknown"),
+                    messages=form_data.get("messages", []),
+                    response=content,
+                ):
+                    ChatLogs.create_chat_log(
+                        user_id=user.id,
+                        conversation_id=conversation_id,
+                        model=form_data.get("model", "unknown"),
+                        messages=form_data.get("messages", []),
+                        response=content,
+                    )
 
         return StreamingResponse(
             stream_wrapper(response.body_iterator, events),
