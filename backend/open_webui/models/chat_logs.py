@@ -26,6 +26,7 @@ class ChatLog(Base):
     model = Column(String)
     messages = Column(JSON)  # Store the messages exchanged
     response = Column(Text)  # Store the response from the model
+    title = Column(String, nullable=True)  # Store the title of the chat log
     created_at = Column(BigInteger)
     updated_at = Column(BigInteger)  # Track when the log was last updated
     
@@ -45,6 +46,7 @@ class ChatLogModel(BaseModel):
     model: str
     messages: list[dict]
     response: Optional[str] = None
+    title: Optional[str] = None  # Store the title of the chat log
     created_at: int  # timestamp in epoch
     updated_at: int  # timestamp in epoch
 
@@ -56,7 +58,8 @@ class ChatLogTable:
         user_id: str, 
         model: str, 
         messages: list[dict], 
-        response: str
+        response: str,
+        title: Optional[str] = None
     ) -> Optional[ChatLogModel]:
         """Create a new chat log entry"""
         with get_db() as db:
@@ -68,6 +71,7 @@ class ChatLogTable:
                     "model": model,
                     "messages": messages,
                     "response": response,
+                    "title": title,
                     "created_at": timestamp,
                     "updated_at": timestamp,
                 }
@@ -121,6 +125,15 @@ class ChatLogTable:
                 return ChatLogModel.model_validate(chat_log)
         except Exception:
             return None
+        
+    def get_chat_log_title_by_conversation_id(self, conversation_id: str) -> Optional[str]:
+        """Get the title of a chat log by conversation ID"""
+        try:
+            with get_db() as db:
+                chat_log = db.query(ChatLog).filter_by(conversation_id=conversation_id).first()
+                return chat_log.title if chat_log else None
+        except Exception:
+            return None
 
     def delete_chat_log_by_conversation_id(self, conversation_id: str) -> bool:
         """Delete a chat log by conversation ID"""
@@ -139,6 +152,7 @@ class ChatLogTable:
         model: str,
         messages: list[dict],
         response: str,
+        title: Optional[str] = None,
     ) -> Optional[ChatLogModel]:
         """Update an existing chat log entry"""
         try:
@@ -154,6 +168,8 @@ class ChatLogTable:
                 chat_log.model = model
                 chat_log.messages = messages
                 chat_log.response = response
+                if title:
+                    chat_log.title = title  # Only update title if provided
                 chat_log.updated_at = timestamp  # Update the timestamp
                 
                 db.commit()
@@ -162,5 +178,24 @@ class ChatLogTable:
         except Exception:
             return None
 
+    def update_chat_log_title(
+        self, 
+        conversation_id: str,
+        title: str
+    ) -> bool:
+        """Update the title of a chat log"""
+        try:
+            with get_db() as db:
+                chat_log = db.query(ChatLog).filter_by(conversation_id=conversation_id).first()
+                if not chat_log:
+                    return False
+                
+                chat_log.title = title
+                chat_log.updated_at = int(time.time())  # Update the timestamp
+                
+                db.commit()
+                return True
+        except Exception:
+            return False
 
 ChatLogs = ChatLogTable()

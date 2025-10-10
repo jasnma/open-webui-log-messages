@@ -66,6 +66,13 @@
 							href="/admin">{$i18n.t('Users')}</a
 						>
 
+						<a
+							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/chat-logs')
+								? ''
+								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+							href="/admin/chat-logs">{$i18n.t('Chat Logs')}</a
+						>
+
 						<!-- <a
 							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/analytics')
 								? ''

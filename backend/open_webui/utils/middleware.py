@@ -3161,6 +3161,8 @@ async def process_chat_response(
 
             if conversation_id:
                 log.info(f"Final conversation_id: {conversation_id}")
+                title = ChatLogs.get_chat_log_title_by_conversation_id(conversation_id)
+
                 if not ChatLogs.update_chat_log(
                     conversation_id=conversation_id,
                     user_id=user.id,
@@ -3174,7 +3176,55 @@ async def process_chat_response(
                         model=form_data.get("model", "unknown"),
                         messages=form_data.get("messages", []),
                         response=content,
+                        # title=title,
                     )
+
+                log.info(f"Saved chat log for conversation_id: {conversation_id}")
+                if not title or title == None:
+                    # If no title was generated, try to generate one now
+                    messages = form_data.get("messages", []).copy()
+                    messages.append({"role": "assistant", "content": content})
+                    user_message = get_last_user_message(messages=messages)
+                    res = await generate_title(
+                        request,
+                        {
+                            "model": form_data.get("model", "unknown"),
+                            "messages": messages,
+                            "chat_id": metadata["chat_id"],
+                        },
+                        user,
+                    )
+
+                    if res and isinstance(res, dict):
+                        if len(res.get("choices", [])) == 1:
+                            response_message = res.get("choices", [])[0].get(
+                                "message", {}
+                            )
+
+                            title_string = response_message.get(
+                                "content",
+                                response_message.get(
+                                    "reasoning_content",
+                                    '',
+                                ),
+                            )
+                        else:
+                            title_string = ""
+
+                        title_string = title_string[
+                            title_string.find("{") : title_string.rfind("}") + 1
+                        ]
+
+                        try:
+                            title = json.loads(title_string).get(
+                                "title", user_message
+                            )
+                        except Exception as e:
+                            title = ""
+
+                        ChatLogs.update_chat_log_title(
+                            conversation_id, title
+                        )
 
         return StreamingResponse(
             stream_wrapper(response.body_iterator, events),
