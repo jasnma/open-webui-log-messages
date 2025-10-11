@@ -1,6 +1,7 @@
 <script>
 	import { getContext, onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
+	import { goto } from '$app/navigation';
 	import dayjs from 'dayjs';
 	import localizedFormat from 'dayjs/plugin/localizedFormat';
 	import relativeTime from 'dayjs/plugin/relativeTime';
@@ -272,7 +273,11 @@
 					<tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
 						{#each chatLogs as log}
 							<tr class="hover:bg-gray-50 dark:hover:bg-gray-800">
-								<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+								<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+									on:click={() => {
+										// Navigate to chat log details page
+										goto(`/admin/chat-logs/${log.conversation_id}`);
+									}}>
 									{log.title || 'Untitled'}
 								</td>
 								<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
@@ -291,8 +296,8 @@
 									<button
 										class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
 										on:click={() => {
-											// View log details
-											console.log('View log:', log);
+											// Navigate to chat log details page
+											goto(`/admin/chat-logs/${log.conversation_id}`);
 										}}
 									>
 										{$i18n.t('View')}
