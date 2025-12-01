@@ -5,7 +5,7 @@
 	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
 
-	import { getChatLogs } from '$lib/apis/chat-logs';
+	import { getChatLogById } from '$lib/apis/chat-logs';
 
 	const i18n = getContext('i18n');
 
@@ -28,9 +28,9 @@
 		try {
 			loading = true;
 			// Fetch chat log by conversation_id
-			const response = await getChatLogs(localStorage.token, { conversation_id: conversationId }, true);
-			if (response && response.data && response.data.length > 0) {
-				chatLog = response.data[0];
+			const response = await getChatLogById(localStorage.token, conversationId);
+			if (response) {
+				chatLog = response;
 			} else {
 				toast.error($i18n.t('Chat log not found'));
 				await goto('/admin/chat-logs');

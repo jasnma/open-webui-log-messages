@@ -43,6 +43,38 @@ export const getChatLogs = async (
 	return res;
 };
 
+export const getChatLogById = async (
+	token: string,
+	conversationId: string
+) => {
+	let error = null;
+
+	const endpoint = `/chat-logs/${conversationId}`;
+	
+	const res = await fetch(`${WEBUI_API_BASE_URL}${endpoint}`, {
+		method: 'GET',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			error = err.detail;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
 export const deleteChatLogs = async (
 	token: string,
 	filter?: object,
