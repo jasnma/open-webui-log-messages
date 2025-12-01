@@ -1,6 +1,8 @@
+import logging
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
+from open_webui.env import SRC_LOG_LEVELS
 
 from open_webui.models.chat_logs import ChatLogs, ChatLogModel, ChatLog
 from open_webui.models.users import Users
@@ -9,6 +11,9 @@ from open_webui.utils.middleware import process_chat_payload, process_chat_respo
 from open_webui.internal.db import get_db
 
 router = APIRouter()
+
+log = logging.getLogger(__name__)
+log.setLevel(SRC_LOG_LEVELS["MODELS"])
 
 class ChatLogResponse(BaseModel):
     conversation_id: str
@@ -26,6 +31,7 @@ class ChatLogsResponse(BaseModel):
 
 class ChatLogFilter(BaseModel):
     user_id: Optional[str] = None
+    user_name: Optional[str] = None
     conversation_id: Optional[str] = None
     model: Optional[str] = None
     limit: Optional[int] = 50
@@ -33,13 +39,28 @@ class ChatLogFilter(BaseModel):
 
 @router.get("/", response_model=ChatLogsResponse)
 async def get_chat_logs(
-    filter: ChatLogFilter = None,
+    user_id: Optional[str] = Query(None),
+    user_name: Optional[str] = Query(None),
+    conversation_id: Optional[str] = Query(None),
+    model: Optional[str] = Query(None),
+    limit: Optional[int] = Query(50),
+    skip: Optional[int] = Query(0),
     user=Depends(get_verified_user)
 ):
     """Get chat logs with optional filtering"""
     try:
-        # If no filter is provided, default to user's logs
-        if filter is None:
+        # Create filter from individual parameters
+        filter = ChatLogFilter(
+            user_id=user_id,
+            user_name=user_name,
+            conversation_id=conversation_id,
+            model=model,
+            limit=limit,
+            skip=skip
+        )
+        
+        # If no filter is provided or filter is empty, default to user's logs
+        if filter.model_dump(exclude_unset=True) == {}:
             filter = ChatLogFilter()
         
         # Apply filters
@@ -91,13 +112,28 @@ async def get_chat_logs(
 
 @router.get("/admin", response_model=ChatLogsResponse)
 async def get_all_chat_logs(
-    filter: ChatLogFilter = None,
+    user_id: Optional[str] = Query(None),
+    user_name: Optional[str] = Query(None),
+    conversation_id: Optional[str] = Query(None),
+    model: Optional[str] = Query(None),
+    limit: Optional[int] = Query(50),
+    skip: Optional[int] = Query(0),
     user=Depends(get_admin_user)
 ):
     """Get all chat logs (admin only)"""
     try:
-        # If no filter is provided, default to all logs
-        if filter is None:
+        # Create filter from individual parameters
+        filter = ChatLogFilter(
+            user_id=user_id,
+            user_name=user_name,
+            conversation_id=conversation_id,
+            model=model,
+            limit=limit,
+            skip=skip
+        )
+        
+        # If no filter is provided or filter is empty, default to all logs
+        if filter.model_dump(exclude_unset=True) == {}:
             filter = ChatLogFilter()
         
         # Apply filters
@@ -113,6 +149,30 @@ async def get_all_chat_logs(
             # Get logs by specific user ID
             logs = ChatLogs.get_chat_logs_by_user_id(
                 filter.user_id,
+                skip=filter.skip,
+                limit=filter.limit
+            )
+            count = len(logs)
+        elif filter.user_name:
+            log.info(f"Filtering chat logs by user name: {filter.user_name}")
+            # Get logs by specific user name
+            user_obj = Users.get_user_by_username(filter.user_name)
+            if not user_obj:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User not found"
+                )
+            logs = ChatLogs.get_chat_logs_by_user_id(
+                user_obj.id,
+                skip=filter.skip,
+                limit=filter.limit
+            )
+            count = len(logs)
+        elif filter.model:
+            log.info(f"Getting logs by model: {filter.model}")
+            # Get logs by specific model
+            logs = ChatLogs.get_chat_logs_by_model(
+                filter.model,
                 skip=filter.skip,
                 limit=filter.limit
             )
@@ -163,13 +223,28 @@ async def get_all_chat_logs(
 
 @router.delete("/admin", response_model=bool)
 async def delete_all_chat_logs(
-    filter: ChatLogFilter = None,
+    user_id: Optional[str] = Query(None),
+    user_name: Optional[str] = Query(None),
+    conversation_id: Optional[str] = Query(None),
+    model: Optional[str] = Query(None),
+    limit: Optional[int] = Query(50),
+    skip: Optional[int] = Query(0),
     user=Depends(get_admin_user)
 ):
     """Delete all chat logs (admin only)"""
     try:
+        # Create filter from individual parameters
+        filter = ChatLogFilter(
+            user_id=user_id,
+            user_name=user_name,
+            conversation_id=conversation_id,
+            model=model,
+            limit=limit,
+            skip=skip
+        )
+        
         # If no filter is provided, delete all logs
-        if filter is None:
+        if filter.model_dump(exclude_unset=True) == {}:
             filter = ChatLogFilter()
         
         # Delete by conversation ID if specified
@@ -179,6 +254,18 @@ async def delete_all_chat_logs(
         elif filter.user_id:
             with get_db() as db:
                 db.query(ChatLog).filter_by(user_id=filter.user_id).delete()
+                db.commit()
+                return True
+        # Delete by user name if specified
+        elif filter.user_name:
+            user_obj = Users.get_user_by_username(filter.user_name)
+            if not user_obj:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User not found"
+                )
+            with get_db() as db:
+                db.query(ChatLog).filter_by(user_id=user_obj.id).delete()
                 db.commit()
                 return True
         else:

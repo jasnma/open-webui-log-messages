@@ -25,7 +25,7 @@
 	let loading = false;
 
 	// Filters
-	let userId = '';
+	let userName = '';
 	let model = '';
 	let startDate = '';
 	let endDate = '';
@@ -43,7 +43,7 @@
 			};
 
 			// Add filters if they exist
-			if (userId) filter.user_id = userId;
+			if (userName) filter.user_name = userName;
 			if (model) filter.model = model;
 			if (startDate) filter.start_date = startDate;
 			if (endDate) filter.end_date = endDate;
@@ -68,7 +68,7 @@
 	};
 
 	const clearFilters = () => {
-		userId = '';
+		userName = '';
 		model = '';
 		startDate = '';
 		endDate = '';
@@ -110,7 +110,7 @@
 			const filter = {};
 			
 			// Add filters if they exist
-			if (userId) filter.user_id = userId;
+			if (userName) filter.user_name = userName;
 			if (model) filter.model = model;
 			if (startDate) filter.start_date = startDate;
 			if (endDate) filter.end_date = endDate;
@@ -143,14 +143,14 @@
 		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
 			<div>
 				<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-					{$i18n.t('User ID')}
+					{$i18n.t('User Name')}
 				</label>
 				<input
 					type="text"
 					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-					bind:value={userId}
+					bind:value={userName}
 					on:input={handleFilterChange}
-					placeholder={$i18n.t('Filter by user ID')}
+					placeholder={$i18n.t('Filter by user name')}
 				/>
 			</div>
 			

@@ -116,6 +116,23 @@ class ChatLogTable:
                 .limit(limit)
             )
             return [ChatLogModel.model_validate(log) for log in all_logs]
+        
+    def get_chat_logs_by_model(
+        self, 
+        model: str, 
+        skip: int = 0, 
+        limit: int = 50
+    ) -> list[ChatLogModel]:
+        """Get chat logs by model"""
+        with get_db() as db:
+            all_logs = (
+                db.query(ChatLog)
+                .filter_by(model=model)
+                .order_by(ChatLog.created_at.desc())
+                .offset(skip)
+                .limit(limit)
+            )
+            return [ChatLogModel.model_validate(log) for log in all_logs]
 
     def get_chat_log_by_conversation_id(self, conversation_id: str) -> Optional[ChatLogModel]:
         """Get a specific chat log by conversation ID"""

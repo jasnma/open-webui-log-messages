@@ -215,6 +215,14 @@ class UsersTable:
         except Exception:
             return None
 
+    def get_user_by_username(self, username: str) -> Optional[UserModel]:
+        try:
+            with get_db() as db:
+                user = db.query(User).filter_by(name=username).first()
+                return UserModel.model_validate(user)
+        except Exception:
+            return None
+
     def get_users(
         self,
         filter: Optional[dict] = None,
