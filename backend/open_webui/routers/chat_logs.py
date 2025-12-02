@@ -154,7 +154,6 @@ async def get_all_chat_logs(
             )
             count = len(logs)
         elif filter.user_name:
-            log.info(f"Filtering chat logs by user name: {filter.user_name}")
             # Get logs by specific user name
             user_obj = Users.get_user_by_username(filter.user_name)
             if not user_obj:
@@ -283,38 +282,35 @@ async def delete_all_chat_logs(
 @router.get("/{conversation_id}", response_model=ChatLogResponse)
 async def get_chat_log_by_conversation_id(
     conversation_id: str,
-    user=Depends(get_verified_user)
+    user=Depends(get_admin_user)
 ):
     """Get a specific chat log by conversation ID"""
+
+    log.info(f"Retrieving chat log for conversation ID: {conversation_id}")
+
     try:
-        log = ChatLogs.get_chat_log_by_conversation_id(conversation_id)
-        if not log:
+        chat_log = ChatLogs.get_chat_log_by_conversation_id(conversation_id)
+        if not chat_log:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Chat log not found"
             )
         
-        # Verify ownership
-        if log.user_id != user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to this chat log"
-            )
-        
         # Get user name
         user_name = "Unknown User"
-        user_obj = Users.get_user_by_id(log.user_id)
+        user_obj = Users.get_user_by_id(chat_log.user_id)
         if user_obj:
             user_name = user_obj.name
         
         return ChatLogResponse(
-            conversation_id=log.conversation_id,
-            user_id=log.user_id,
+            conversation_id=chat_log.conversation_id,
+            title=chat_log.title,
+            user_id=chat_log.user_id,
             user_name=user_name,
-            model=log.model,
-            messages=log.messages,
-            response=log.response,
-            created_at=log.created_at
+            model=chat_log.model,
+            messages=chat_log.messages,
+            response=chat_log.response,
+            created_at=chat_log.created_at
         )
     except Exception as e:
         raise HTTPException(
